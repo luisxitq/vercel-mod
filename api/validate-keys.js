@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     }
 
     // REEMPLAZA ESTA URL CON LA URL DE TU REALTIME DATABASE EN FIREBASE
-    const FIREBASE_DB_URL = "https://TU_PROYECTO-default-rtdb.firebaseio.com";
+    const FIREBASE_DB_URL = "https://aimengine-62132-default-rtdb.firebaseio.com";
 
     try {
         // Consultar el nodo de la llave en Firebase vía REST API

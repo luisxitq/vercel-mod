@@ -1,5 +1,8 @@
 {
-  "name": "vercel-mod-auth",
+  "name": "panda-key-server",
   "version": "1.0.0",
-  "private": true
+  "dependencies": {
+    "cors": "^2.8.5"
+  }
 }
+
