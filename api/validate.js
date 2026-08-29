@@ -3,8 +3,6 @@ const WS_TOKEN = "KJGMDKFJDHG34KD";
 const CURRENT_VERSION = "1.0";
 const FIREBASE_URL = "https://aimengine-62132-default-rtdb.firebaseio.com";
 
-// ── Cifrado XOR + Base64 ────────────────────────────────────────────────────
-
 function xorEncryptDecrypt(data, key) {
     let result = '';
     for (let i = 0; i < data.length; i++) {
@@ -37,14 +35,14 @@ function decryptPayload(encodedData, key) {
     }
 }
 
-// ── Helpers Firebase ────────────────────────────────────────────────────────
-
 function parseValidity(str) {
     try {
-        const [datePart, timePart] = str.trim().split(' ');
-        const [day, month, year] = datePart.split('-').map(Number);
-        const [hours, minutes] = timePart.split(':').map(Number);
-        return new Date(year, month - 1, day, hours, minutes);
+        if (!str) return null;
+        const parts = str.trim().split(' ');
+        if (parts.length < 2) return null;
+        const [day, month, year] = parts[0].split('-').map(Number);
+        const [hours, minutes] = parts[1].split(':').map(Number);
+        return new Date(year, month - 1, day, hours || 0, minutes || 0);
     } catch {
         return null;
     }
@@ -52,10 +50,12 @@ function parseValidity(str) {
 
 async function getLicense(licenseKey) {
     try {
-        const res = await fetch(`\( {FIREBASE_URL}/userinfo/ \){encodeURIComponent(licenseKey)}.json`);
+        const url = `\( {FIREBASE_URL}/userinfo/ \){encodeURIComponent(licenseKey)}.json`;
+        const res = await fetch(url);
         if (!res.ok) return null;
-        return await res.json();
-    } catch {
+        const data = await res.json();
+        return data;
+    } catch (e) {
         return null;
     }
 }
@@ -67,12 +67,8 @@ async function bindHWID(licenseKey, hwid) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ device: hwid })
         });
-    } catch {
-        // No bloqueamos el login si falla el bind
-    }
+    } catch (e) {}
 }
-
-// ── Handler principal ───────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -93,9 +89,13 @@ export default async function handler(req, res) {
             return res.status(200).json({ data: err });
         }
         
-        const { license_key, hwid, version } = payload;
+        let { license_key, hwid, version } = payload;
         
-        // Validar versión
+        // Limpiar la key
+        if (license_key) {
+            license_key = license_key.toString().trim().toUpperCase();
+        }
+        
         if (version !== CURRENT_VERSION) {
             const err = encryptPayload({
                 status: "error",
@@ -110,35 +110,39 @@ export default async function handler(req, res) {
             return res.status(200).json({ data: err });
         }
         
-        // Obtener licencia
         const license = await getLicense(license_key);
         
-        if (!license || license.status !== "active") {
+        if (!license) {
             const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
             return res.status(200).json({ data: err });
         }
         
-        // Verificar expiración
+        if (license.status !== "active") {
+            const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
+            return res.status(200).json({ data: err });
+        }
+        
+        // Verificar fecha
         const expiryDate = parseValidity(license.validity);
-        if (!expiryDate || isNaN(expiryDate.getTime()) || new Date() > expiryDate) {
+        const now = new Date();
+        
+        if (!expiryDate || isNaN(expiryDate.getTime()) || now > expiryDate) {
             const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
             return res.status(200).json({ data: err });
         }
         
-        // ── Lógica HWID ───────────────────────────────────────────────────
+        // HWID Lock
         const storedDevice = (license.device || "").toString().trim();
-        const isLocked = license.access === "1";
+        const isLocked = license.access === "1" || license.access === 1;
         const hasHWID = hwid && hwid.toString().trim().length > 0;
         
         if (isLocked) {
             if (!storedDevice || storedDevice === "null" || storedDevice === "") {
-                // Primera vez → vincular HWID
                 if (hasHWID) {
-                    await bindHWID(license_key, hwid);
+                    await bindHWID(license_key, hwid.toString().trim());
                 }
             } else {
-                // Ya tiene HWID → debe coincidir
-                if (!hasHWID || storedDevice !== hwid) {
+                if (!hasHWID || storedDevice !== hwid.toString().trim()) {
                     const err = encryptPayload({
                         status: "error",
                         message: "HWID mismatch. This key is locked to another device."
@@ -148,7 +152,7 @@ export default async function handler(req, res) {
             }
         }
         
-        // ── Éxito ─────────────────────────────────────────────────────────
+        // Éxito
         const success = encryptPayload({
             status: "success",
             data: {
