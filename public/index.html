@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PANDA VIP - Admin Panel (Vercel Host)</title>
+    <title>PANDA VIP - Admin Server Panel</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -30,17 +30,17 @@
 
     <aside class="sidebar">
         <h2 style="color: var(--accent); margin-bottom: 20px;"><i class="fas fa-shield-alt"></i> PANDA VERCEL</h2>
-        <p style="color: var(--muted); font-size: 0.85rem;">Generador de Llaves</p>
+        <p style="color: var(--muted); font-size: 0.85rem;">Servidor Autónomo</p>
     </aside>
 
     <main class="main">
         <h2>Crear Licencia</h2>
         <div class="card" style="max-width: 500px;">
             <div style="margin-bottom: 12px;">
-                <label>Llave Generada</label>
+                <label>Llave a Generar</label>
                 <div class="input-group">
                     <input type="text" id="keyInput" placeholder="PANDA-XXXXX-XXXXX-XXXXX">
-                    <button class="btn btn-secondary" onclick="generateKey()"><i class="fas fa-dice"></i> Random Key</button>
+                    <button class="btn btn-secondary" onclick="generateKey()"><i class="fas fa-dice"></i></button>
                 </div>
             </div>
             <div style="margin-bottom: 12px;">
@@ -48,84 +48,97 @@
                 <input type="number" id="daysInput" value="30">
             </div>
             <div style="margin-bottom: 15px;">
-                <label>Límite de Dispositivos (Access)</label>
+                <label>Límite de Dispositivos</label>
                 <select id="accessInput">
                     <option value="1">1 Dispositivo</option>
                     <option value="∞">Ilimitado (∞)</option>
                 </select>
             </div>
-            <button class="btn btn-primary" style="width: 100%;" onclick="saveKey()">Guardar Key</button>
+            <button class="btn btn-primary" style="width: 100%;" onclick="saveKey()">Guardar en Servidor</button>
         </div>
 
-        <h2>Lista de Llaves</h2>
+        <h2>Llaves Registradas</h2>
         <div id="keysContainer" class="grid"></div>
     </main>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script>
-        // CONFIGURACIÓN DE TU FIREBASE REALTIME DATABASE
-        const firebaseConfig = {
-            databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
         function generateKey() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             const seg = () => Array.from({length: 5}, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
             document.getElementById('keyInput').value = `PANDA-${seg()}-${seg()}-${seg()}`;
         }
 
-        function saveKey() {
+        async function saveKey() {
             const key = document.getElementById('keyInput').value.trim();
             const days = parseInt(document.getElementById('daysInput').value);
             const access = document.getElementById('accessInput').value;
 
-            if(!key) return alert('Genera una llave primero');
+            if(!key) return alert('Genera una llave primero.');
 
             const now = new Date();
             const exp = new Date(now.getTime() + (days * 86400000));
             const pad = n => n < 10 ? '0' + n : n;
-            
             const fmt = d => `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-            db.ref(`userinfo/${key}`).set({
-                status: "active",
-                validity: fmt(exp),
-                access: access,
-                device: "null",
-                rgtime: fmt(now)
-            }).then(() => {
-                alert('Key guardada en el servidor');
-                generateKey();
+            const res = await fetch('/api/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: key,
+                    status: "active",
+                    validity: fmt(exp),
+                    access: access,
+                    rgtime: fmt(now)
+                })
             });
+
+            if (res.ok) {
+                alert('¡Key guardada con éxito!');
+                generateKey();
+                loadKeys();
+            } else {
+                alert('Error al guardar llave en Vercel.');
+            }
         }
 
-        db.ref('userinfo').on('value', snap => {
+        async function deleteKey(key) {
+            if(!confirm(`¿Eliminar ${key}?`)) return;
+
+            const res = await fetch('/api/keys', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key })
+            });
+
+            if(res.ok) loadKeys();
+        }
+
+        async function loadKeys() {
+            const res = await fetch('/api/keys');
+            const data = await res.json();
             const container = document.getElementById('keysContainer');
             container.innerHTML = '';
-            const data = snap.val() || {};
 
             Object.keys(data).forEach(k => {
                 const item = data[k];
                 container.innerHTML += `
                     <div class="key-box">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; justify-between; align-items:center;">
                             <b style="color:var(--accent); font-size:0.9rem;">${k}</b>
                             <span class="badge ${item.status}">${item.status}</span>
                         </div>
                         <div style="font-size:0.75rem; color:var(--muted); margin: 10px 0;">
-                            <div>Expira: ${item.validity}</div>
-                            <div>Device ID: ${item.device}</div>
+                            <div>Expira: ${item.validity || 'Sin datos'}</div>
+                            <div>HWID: ${item.device || 'null'}</div>
                         </div>
-                        <button class="btn btn-danger" style="padding: 4px 8px; font-size:0.7rem;" onclick="db.ref('userinfo/${k}').remove()">Eliminar</button>
+                        <button class="btn btn-danger" style="padding: 4px 8px; font-size:0.7rem;" onclick="deleteKey('${k}')">Eliminar</button>
                     </div>
                 `;
             });
-        });
+        }
 
         generateKey();
+        loadKeys();
     </script>
 </body>
 </html>
