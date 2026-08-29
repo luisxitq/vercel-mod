@@ -1,16 +1,37 @@
-const fetch = require('node-fetch');
+const express = require('express');
+const router = express.Router();
 
-function xorEncryptDecrypt(input, key) {
-    let output = '';
-    for (let i = 0; i < input.length; i++) {
-        output += String.fromCharCode(input.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+// Configuración de llaves globales
+const ENCRYPTION_KEY = "JiM21rNU12eERlNmpqa3FuQks";
+const WS_TOKEN = "KJGMDKFJDHG34KD";
+const CURRENT_VERSION = "1.0";
+
+// Algoritmos XOR + Base64
+function xorEncryptDecrypt(data, key) {
+    let result = '';
+    for (let i = 0; i < data.length; i++) {
+        result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
     }
-    return output;
+    return result;
+}
+
+function base64Encode(str) {
+    return Buffer.from(str, 'binary').toString('base64');
+}
+
+function base64Decode(str) {
+    return Buffer.from(str, 'base64').toString('binary');
+}
+
+function encryptPayload(dataObj, key) {
+    const jsonStr = JSON.stringify(dataObj);
+    const encrypted = xorEncryptDecrypt(jsonStr, key);
+    return base64Encode(encrypted);
 }
 
 function decryptPayload(encodedData, key) {
     try {
-        const decoded = Buffer.from(encodedData, 'base64').toString('utf8');
+        const decoded = base64Decode(encodedData);
         const decrypted = xorEncryptDecrypt(decoded, key);
         return JSON.parse(decrypted);
     } catch (e) {
@@ -18,92 +39,72 @@ function decryptPayload(encodedData, key) {
     }
 }
 
-function encryptPayload(jsonObject, key) {
-    const jsonString = JSON.stringify(jsonObject);
-    const encrypted = xorEncryptDecrypt(jsonString, key);
-    return Buffer.from(encrypted).toString('base64');
-}
-
-module.exports = async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') return res.status(200).end();
-
-    const ENCRYPTION_KEY = "JiM21rNU12eERlNmpqa3FuQks";
-    const FIREBASE_URL = "https://aimengine-62132-default-rtdb.firebaseio.com";
-
-    // Función auxiliar para responder SIEMPRE cifrado al C++
-    const sendEncryptedResponse = (payloadObj) => {
-        const encrypted = encryptPayload(payloadObj, ENCRYPTION_KEY);
-        return res.status(200).json({ data: encrypted });
-    };
-
+// Ruta POST del Panel: /api/verify-key
+router.post('/verify-key', async (req, res) => {
     try {
-        const { data } = req.body || {};
-        if (!data) {
-            return sendEncryptedResponse({ status: "error", message: "Faltan datos de envio" });
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { token, data } = body || {};
+
+        if (token !== WS_TOKEN || !data) {
+            return res.status(400).json({ error: 'Invalid Request' });
         }
 
-        const decryptedPayload = decryptPayload(data, ENCRYPTION_KEY);
-        if (!decryptedPayload) {
-            return sendEncryptedResponse({ status: "error", message: "Error al desencriptar datos" });
+        const payload = decryptPayload(data, ENCRYPTION_KEY);
+        if (!payload) {
+            const errEncrypted = encryptPayload({ status: "error", message: "Decryption failed" }, ENCRYPTION_KEY);
+            return res.status(200).json({ data: errEncrypted });
         }
 
-        const { license_key: key, hwid: device_id, version } = decryptedPayload;
+        const { license_key, version } = payload;
 
-        // Lectura en Firebase
-        const response = await fetch(`${FIREBASE_URL}/userinfo/${key}.json`);
-        const keyData = await response.json();
-
-        if (!keyData) {
-            return sendEncryptedResponse({ status: "error", message: "La llave no existe." });
-        } 
-        
-        if (keyData.status !== 'active') {
-            return sendEncryptedResponse({ status: "error", message: "La llave esta inactiva." });
+        // Validar versión
+        if (version !== CURRENT_VERSION) {
+            const versionErr = encryptPayload({
+                status: "error",
+                message: "Old version. Please update.",
+                data: { version: CURRENT_VERSION }
+            }, ENCRYPTION_KEY);
+            return res.status(200).json({ data: versionErr });
         }
 
-        // Validación de fecha
-        const [datePart, timePart] = keyData.validity.split(' ');
-        const [day, month, year] = datePart.split('-');
-        const [hour, minute] = timePart.split(':');
-        const expiryDate = new Date(year, month - 1, day, hour, minute);
+        // --- CONSULTA AL PANEL / BASE DE DATOS ---
+        // Sustituye 'getLicenseFromDB' por tu consulta real a Firebase/MySQL
+        const licenseData = await getLicenseFromDB(license_key); 
 
-        if (new Date() > expiryDate) {
-            await fetch(`${FIREBASE_URL}/userinfo/${key}.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'inactive' })
-            });
-            return sendEncryptedResponse({ status: "error", message: "La licencia ha expirado." });
-        }
+        if (licenseData && licenseData.active) {
+            // Verificar si la fecha actual es menor a la fecha de expiración
+            const now = new Date();
+            const expiry = new Date(licenseData.expiry_date);
 
-        // Control HWID
-        if (keyData.access === "1") {
-            if (keyData.device === "null" || !keyData.device) {
-                await fetch(`${FIREBASE_URL}/userinfo/${key}.json`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ device: device_id })
-                });
-            } else if (keyData.device !== device_id) {
-                return sendEncryptedResponse({ status: "error", message: "Llave registrada en otro celular." });
+            if (now > expiry) {
+                const expiredErr = encryptPayload({
+                    status: "error",
+                    message: "License expired"
+                }, ENCRYPTION_KEY);
+                return res.status(200).json({ data: expiredErr });
             }
+
+            const successResp = encryptPayload({
+                status: "success",
+                data: {
+                    expiry_date: licenseData.expiry_date,
+                    version: CURRENT_VERSION,
+                    auth_token: "VALID_TOKEN_AUTH_8BALL"
+                }
+            }, ENCRYPTION_KEY);
+            return res.status(200).json({ data: successResp });
+        } else {
+            const keyErr = encryptPayload({
+                status: "error",
+                message: "Invalid license key"
+            }, ENCRYPTION_KEY);
+            return res.status(200).json({ data: keyErr });
         }
 
-        // Si todo es correcto:
-        return sendEncryptedResponse({
-            status: "success",
-            data: {
-                expiry_date: keyData.validity,
-                version: version || "1.0",
-                auth_token: "PANDA_OK_AUTH"
-            }
-        });
-
-    } catch (e) {
-        return sendEncryptedResponse({ status: "error", message: "Error interno del servidor" });
+    } catch (error) {
+        const serverErr = encryptPayload({ status: "error", message: "Internal server error" }, ENCRYPTION_KEY);
+        return res.status(200).json({ data: serverErr });
     }
-};
+});
+
+module.exports = router;
