@@ -1,12 +1,5 @@
 {
-  "name": "panda-key-server",
+  "name": "vercel-mod-auth",
   "version": "1.0.0",
-  "description": "Servidor de validación de licencias",
-  "main": "api/validate-key.js",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  },
-  "engines": {
-    "node": ">=18.x"
-  }
+  "private": true
 }
