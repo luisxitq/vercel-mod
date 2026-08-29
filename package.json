@@ -1,7 +1,12 @@
 {
   "name": "panda-key-server",
   "version": "1.0.0",
-  "dependencies": {
-    "@vercel/kv": "^1.0.0"
+  "description": "Servidor de validación de licencias para Mod Android",
+  "main": "api/validate-key.js",
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
