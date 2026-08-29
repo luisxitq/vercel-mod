@@ -68,102 +68,172 @@ async function bindHWID(licenseKey, hwid) {
     } catch {}
 }
 
+export default async function handler(req, res) const ENCRYPTION_KEY = "JiM21rNU12eERlNmpqa3FuQks";
+const WS_TOKEN = "KJGMDKFJDHG34KD";
+const CURRENT_VERSION = "1.0";
+const FIREBASE_URL = "https://aimengine-62132-default-rtdb.firebaseio.com";
+
+function xorEncryptDecrypt(data, key) {
+    let result = "";
+    for (let i = 0; i < data.length; i++) {
+        result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return result;
+}
+
+function base64Encode(str) {
+    return Buffer.from(str, "binary").toString("base64");
+}
+
+function base64Decode(str) {
+    return Buffer.from(str, "base64").toString("binary");
+}
+
+function encryptPayload(obj, key) {
+    return base64Encode(xorEncryptDecrypt(JSON.stringify(obj), key));
+}
+
+function decryptPayload(encoded, key) {
+    try {
+        return JSON.parse(xorEncryptDecrypt(base64Decode(encoded), key));
+    } catch (e) {
+        return null;
+    }
+}
+
+function parseValidity(str) {
+    try {
+        if (!str) return null;
+        const parts = str.trim().split(" ");
+        const dateParts = parts[0].split("-");
+        const timeParts = (parts[1] || "00:00").split(":");
+        const day = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1;
+        const year = parseInt(dateParts[2], 10);
+        const hours = parseInt(timeParts[0], 10) || 0;
+        const minutes = parseInt(timeParts[1], 10) || 0;
+        // Crear fecha en UTC para evitar problemas de zona horaria
+        return new Date(Date.UTC(year, month, day, hours, minutes, 0));
+    } catch (e) {
+        return null;
+    }
+}
+
+async function getLicense(key) {
+    try {
+        const res = await fetch(FIREBASE_URL + "/userinfo/" + encodeURIComponent(key) + ".json");
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+async function bindHWID(key, hwid) {
+    try {
+        await fetch(FIREBASE_URL + "/userinfo/" + encodeURIComponent(key) + ".json", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device: hwid })
+        });
+    } catch (e) {}
+}
+
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
+    if (req.method !== "POST") {
+        return res.status(405).json({ error: "Method Not Allowed" });
     }
     
     try {
-        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { token, data } = body || {};
+        const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+        const token = body && body.token;
+        const data = body && body.data;
         
         if (token !== WS_TOKEN || !data) {
-            return res.status(400).json({ error: 'Invalid Request' });
+            return res.status(400).json({ error: "Invalid Request" });
         }
         
         const payload = decryptPayload(data, ENCRYPTION_KEY);
         if (!payload) {
-            const err = encryptPayload({ status: "error", message: "Decryption failed" }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
+            return res.status(200).json({
+                data: encryptPayload({ status: "error", message: "Decryption failed" }, ENCRYPTION_KEY)
+            });
         }
         
-        let { license_key, hwid, version } = payload;
-        
-        if (license_key) {
-            license_key = String(license_key).trim().toUpperCase();
-        }
+        let license_key = payload.license_key ? String(payload.license_key).trim().toUpperCase() : "";
+        let hwid = payload.hwid ? String(payload.hwid).trim() : "";
+        let version = payload.version;
         
         if (version !== CURRENT_VERSION) {
-            const err = encryptPayload({
-                status: "error",
-                message: "Old version. Please update.",
-                data: { version: CURRENT_VERSION }
-            }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
+            return res.status(200).json({
+                data: encryptPayload({
+                    status: "error",
+                    message: "Old version. Please update.",
+                    data: { version: CURRENT_VERSION }
+                }, ENCRYPTION_KEY)
+            });
         }
         
         if (!license_key) {
-            const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
+            return res.status(200).json({
+                data: encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY)
+            });
         }
         
         const license = await getLicense(license_key);
         
-        // Key no existe o fue eliminada
-        if (!license) {
-            const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
+        if (!license || license.status !== "active") {
+            return res.status(200).json({
+                data: encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY)
+            });
         }
         
-        if (license.status !== "active") {
-            const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
-        }
-        
-        // Verificar fecha de expiración
+        // Verificar fecha
         const expiryDate = parseValidity(license.validity);
-        if (!expiryDate || isNaN(expiryDate.getTime()) || new Date() > expiryDate) {
-            const err = encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY);
-            return res.status(200).json({ data: err });
+        const now = new Date();
+        
+        if (!expiryDate || isNaN(expiryDate.getTime()) || now.getTime() > expiryDate.getTime()) {
+            return res.status(200).json({
+                data: encryptPayload({ status: "error", message: "Invalid or expired license key" }, ENCRYPTION_KEY)
+            });
         }
         
         // HWID Lock
         const storedDevice = (license.device || "").toString().trim();
         const isLocked = license.access === "1" || license.access === 1;
-        const cleanHwid = hwid ? String(hwid).trim() : "";
         
         if (isLocked) {
             if (!storedDevice || storedDevice === "null" || storedDevice === "") {
-                // Primera vez → vincular HWID
-                if (cleanHwid) {
-                    await bindHWID(license_key, cleanHwid);
+                if (hwid) {
+                    await bindHWID(license_key, hwid);
                 }
             } else {
-                // Ya tiene HWID → debe coincidir
-                if (!cleanHwid || storedDevice !== cleanHwid) {
-                    const err = encryptPayload({
-                        status: "error",
-                        message: "HWID mismatch. This key is locked to another device."
-                    }, ENCRYPTION_KEY);
-                    return res.status(200).json({ data: err });
+                if (!hwid || storedDevice !== hwid) {
+                    return res.status(200).json({
+                        data: encryptPayload({
+                            status: "error",
+                            message: "HWID mismatch. This key is locked to another device."
+                        }, ENCRYPTION_KEY)
+                    });
                 }
             }
         }
         
         // Éxito
-        const success = encryptPayload({
-            status: "success",
-            data: {
-                expiry_date: expiryDate.toISOString(),
-                version: CURRENT_VERSION,
-                auth_token: "VALID_TOKEN_AUTH_8BALL"
-            }
-        }, ENCRYPTION_KEY);
-        
-        return res.status(200).json({ data: success });
+        return res.status(200).json({
+            data: encryptPayload({
+                status: "success",
+                data: {
+                    expiry_date: expiryDate.toISOString(),
+                    version: CURRENT_VERSION,
+                    auth_token: "VALID_TOKEN_AUTH_8BALL"
+                }
+            }, ENCRYPTION_KEY)
+        });
         
     } catch (error) {
-        const err = encryptPayload({ status: "error", message: "Internal server error" }, ENCRYPTION_KEY);
-        return res.status(200).json({ data: err });
+        return res.status(200).json({
+            data: encryptPayload({ status: "error", message: "Internal server error" }, ENCRYPTION_KEY)
+        });
     }
 }
