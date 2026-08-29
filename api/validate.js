@@ -4,7 +4,7 @@ const CURRENT_VERSION = "1.0";
 
 // Base de datos de licencias (Licencia -> Fecha de expiración)
 const VALID_KEYS = {
-    "MI-LLAVE-VIP-2026": "2026-12-31T23:59:59Z",
+    "PANDA-KEY-VIP-2026": "2026-12-31T23:59:59Z",
     "TEST-KEY-123": "2026-10-01T12:00:00Z"
 };
 
