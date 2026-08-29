@@ -1,4 +1,5 @@
-// Cifrado/Descifrado XOR + Base64 idéntico al Mod C++
+const fetch = require('node-fetch');
+
 function xorEncryptDecrypt(input, key) {
     let output = '';
     for (let i = 0; i < input.length; i++) {
@@ -29,96 +30,80 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
-    if (req.method !== 'POST') return res.status(405).json({ status: "error", message: "Método no permitido" });
 
     const ENCRYPTION_KEY = "JiM21rNU12eERlNmpqa3FuQks";
     const FIREBASE_URL = "https://aimengine-62132-default-rtdb.firebaseio.com";
 
+    // Función auxiliar para responder SIEMPRE cifrado al C++
+    const sendEncryptedResponse = (payloadObj) => {
+        const encrypted = encryptPayload(payloadObj, ENCRYPTION_KEY);
+        return res.status(200).json({ data: encrypted });
+    };
+
     try {
-        const { token, data } = req.body || {};
+        const { data } = req.body || {};
         if (!data) {
-            return res.status(400).json({ status: "error", message: "Datos faltantes" });
+            return sendEncryptedResponse({ status: "error", message: "Faltan datos de envio" });
         }
 
         const decryptedPayload = decryptPayload(data, ENCRYPTION_KEY);
         if (!decryptedPayload) {
-            return res.status(400).json({ status: "error", message: "Error al descifrar datos" });
+            return sendEncryptedResponse({ status: "error", message: "Error al desencriptar datos" });
         }
 
         const { license_key: key, hwid: device_id, version } = decryptedPayload;
 
-        // Consultar Firebase Realtime Database
+        // Lectura en Firebase
         const response = await fetch(`${FIREBASE_URL}/userinfo/${key}.json`);
         const keyData = await response.json();
 
-        let responseInner = {};
-
         if (!keyData) {
-            responseInner = { status: "error", message: "La llave no existe." };
-        } else if (keyData.status !== 'active') {
-            responseInner = { status: "error", message: "La llave está inactiva." };
-        } else {
-            // Validar expiración (Formato guardado por el Panel: DD-MM-YYYY HH:mm)
-            const [datePart, timePart] = keyData.validity.split(' ');
-            const [day, month, year] = datePart.split('-');
-            const [hour, minute] = timePart.split(':');
-            const expiryDate = new Date(year, month - 1, day, hour, minute);
+            return sendEncryptedResponse({ status: "error", message: "La llave no existe." });
+        } 
+        
+        if (keyData.status !== 'active') {
+            return sendEncryptedResponse({ status: "error", message: "La llave esta inactiva." });
+        }
 
-            if (new Date() > expiryDate) {
-                // Marcar como inactiva en Firebase si ya expiró
+        // Validación de fecha
+        const [datePart, timePart] = keyData.validity.split(' ');
+        const [day, month, year] = datePart.split('-');
+        const [hour, minute] = timePart.split(':');
+        const expiryDate = new Date(year, month - 1, day, hour, minute);
+
+        if (new Date() > expiryDate) {
+            await fetch(`${FIREBASE_URL}/userinfo/${key}.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'inactive' })
+            });
+            return sendEncryptedResponse({ status: "error", message: "La licencia ha expirado." });
+        }
+
+        // Control HWID
+        if (keyData.access === "1") {
+            if (keyData.device === "null" || !keyData.device) {
                 await fetch(`${FIREBASE_URL}/userinfo/${key}.json`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'inactive' })
+                    body: JSON.stringify({ device: device_id })
                 });
-                responseInner = { status: "error", message: "La licencia ha expirado." };
-            } else if (keyData.access === "1") {
-                // Control HWID (Dispositivo)
-                if (keyData.device === "null" || !keyData.device) {
-                    // Vincular dispositivo por primera vez
-                    await fetch(`${FIREBASE_URL}/userinfo/${key}.json`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device: device_id })
-                    });
-                    responseInner = {
-                        status: "success",
-                        data: {
-                            expiry_date: keyData.validity,
-                            version: version || "1.0",
-                            auth_token: "PANDA_OK_AUTH"
-                        }
-                    };
-                } else if (keyData.device !== device_id) {
-                    responseInner = { status: "error", message: "Llave en uso en otro dispositivo." };
-                } else {
-                    responseInner = {
-                        status: "success",
-                        data: {
-                            expiry_date: keyData.validity,
-                            version: version || "1.0",
-                            auth_token: "PANDA_OK_AUTH"
-                        }
-                    };
-                }
-            } else {
-                // Dispositivos ilimitados (access = ∞)
-                responseInner = {
-                    status: "success",
-                    data: {
-                        expiry_date: keyData.validity,
-                        version: version || "1.0",
-                        auth_token: "PANDA_OK_AUTH"
-                    }
-                };
+            } else if (keyData.device !== device_id) {
+                return sendEncryptedResponse({ status: "error", message: "Llave registrada en otro celular." });
             }
         }
 
-        // Cifrar la respuesta de regreso para el Mod C++
-        const encryptedResponse = encryptPayload(responseInner, ENCRYPTION_KEY);
-        return res.json({ data: encryptedResponse });
+        // Si todo es correcto:
+        return sendEncryptedResponse({
+            status: "success",
+            data: {
+                expiry_date: keyData.validity,
+                version: version || "1.0",
+                auth_token: "PANDA_OK_AUTH"
+            }
+        });
 
     } catch (e) {
-        return res.status(500).json({ status: "error", message: "Error interno en el servidor" });
+        return sendEncryptedResponse({ status: "error", message: "Error interno del servidor" });
     }
 };
