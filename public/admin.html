@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PANDA VIP - Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card: #13131a;
+            --accent: #ff2e43;
+            --text: #f1f1f5;
+            --muted: #8b8b9e;
+            --success: #28a745;
+            --danger: #dc3545;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--card);
+            padding: 16px 20px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h2 {
+            color: var(--accent);
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+        }
+
+        .header span {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .main {
+            flex: 1;
+            padding: 16px;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h3 {
+            font-size: 1.05rem;
+            margin: 18px 0 12px 0;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid #222;
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        label {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-bottom: 6px;
+            display: block;
+            font-weight: 500;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 13px 14px;
+            background: #000;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            padding: 13px 16px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: opacity 0.2s, transform 0.1s;
+            user-select: none;
+        }
+
+        .btn:active {
+            opacity: 0.85;
+            transform: scale(0.98);
+        }
+
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-secondary { background: #222; color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-warning { background: #e67e22; color: #fff; }
+
+        .btn-sm {
+            padding: 8px 12px;
+            font-size: 0.78rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .key-box {
+            background: #181824;
+            border: 1px solid #2a2a38;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .key-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .key-name {
+            color: var(--accent);
+            font-size: 0.88rem;
+            font-weight: 600;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+
+        .badge {
+            padding: 4px 9px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .active {
+            background: rgba(40, 167, 69, 0.15);
+            color: var(--success);
+        }
+
+        .inactive {
+            background: rgba(220, 53, 69, 0.15);
+            color: var(--danger);
+        }
+
+        .info-row {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+
+        .info-row b {
+            color: #bbb;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .actions .btn {
+            flex: 1;
+        }
+
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 20px;
+            font-size: 0.95rem;
+        }
+
+        @media (min-width: 640px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .main {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h2><i class="fas fa-shield-alt"></i> PANDA VIP</h2>
+        <span>Admin Panel</span>
+    </header>
+
+    <main class="main">
+
+        <h3><i class="fas fa-plus-circle"></i> Crear Nueva Licencia</h3>
+        <div class="card">
+            <div class="form-group">
+                <label>Llave a Generar</label>
+                <div class="input-group">
+                    <input type="text" id="keyInput" placeholder="PANDA-XXXXX-XXXXX-XXXXX" readonly>
+                    <button class="btn btn-secondary" onclick="generateKey()">
+                        <i class="fas fa-dice"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Duración (Días)</label>
+                <input type="number" id="daysInput" value="30" min="1">
+            </div>
+
+            <div class="form-group">
+                <label>Tipo de Acceso</label>
+                <select id="accessInput">
+                    <option value="1">1 Dispositivo (Lock HWID)</option>
+                    <option value="∞">Ilimitado (∞)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%; margin-top:6px;" onclick="saveKey()">
+                <i class="fas fa-save"></i> Guardar Key
+            </button>
+        </div>
+
+        <h3><i class="fas fa-key"></i> Licencias Registradas</h3>
+        <div id="keysContainer" class="grid">
+            <div class="empty">Cargando...</div>
+        </div>
+
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            databaseURL: "https://aimengine-62132-default-rtdb.firebaseio.com"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        function generateKey() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const seg = () => Array.from({length: 5}, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+            document.getElementById('keyInput').value = `PANDA-\( {seg()}- \){seg()}-${seg()}`;
+        }
+
+        function formatDate(date) {
+            const pad = n => n < 10 ? '0' + n : n;
+            return `\( {pad(date.getDate())}- \){pad(date.getMonth()+1)}-${date.getFullYear()} \( {pad(date.getHours())}: \){pad(date.getMinutes())}`;
+        }
+
+        function saveKey() {
+            const key = document.getElementById('keyInput').value.trim();
+            const days = parseInt(document.getElementById('daysInput').value) || 30;
+            const access = document.getElementById('accessInput').value;
+
+            if (!key) {
+                alert('Genera una llave primero');
+                return;
+            }
+
+            const now = new Date();
+            const exp = new Date(now.getTime() + (days * 86400000));
+
+            db.ref(`userinfo/${key}`).set({
+                status: "active",
+                validity: formatDate(exp),
+                access: access,
+                device: "null",
+                rgtime: formatDate(now)
+            }).then(() => {
+                alert('✅ Key guardada con éxito!');
+                generateKey();
+            }).catch(err => {
+                alert('Error Firebase: ' + err.message);
+            });
+        }
+
+        function resetHWID(key) {
+            if (!confirm('¿Resetear el HWID de esta key?\nEl siguiente dispositivo que la use se vinculará.')) return;
+
+            db.ref(`userinfo/${key}`).update({
+                device: "null"
+            }).then(() => {
+                alert('HWID reseteado correctamente');
+            }).catch(err => {
+                alert('Error: ' + err.message);
+            });
+        }
+
+        function deleteKey(key) {
+            if (!confirm('¿Eliminar permanentemente esta key?')) return;
+
+            db.ref(`userinfo/${key}`).remove()
+                .catch(err => alert('Error: ' + err.message));
+        }
+
+        db.ref('userinfo').on('value', snap => {
+            const container = document.getElementById('keysContainer');
+            container.innerHTML = '';
+            const data = snap.val() || {};
+            const keys = Object.keys(data);
+
+            if (keys.length === 0) {
+                container.innerHTML = `<div class="empty">No hay licencias registradas</div>`;
+                return;
+            }
+
+            keys.sort((a, b) => {
+                const ta = data[a].rgtime || '';
+                const tb = data[b].rgtime || '';
+                return tb.localeCompare(ta);
+            });
+
+            keys.forEach(k => {
+                const item = data[k];
+                const isActive = item.status === 'active';
+                const device = (item.device || 'null').toString();
+                const isBound = device !== 'null' && device !== '';
+                const accessText = item.access === '1' ? '1 Dispositivo' : 'Ilimitado ∞';
+
+                container.innerHTML += `
+                    <div class="key-box">
+                        <div class="key-header">
+                            <div class="key-name">${k}</div>
+                            <span class="badge \( {isActive ? 'active' : 'inactive'}"> \){item.status}</span>
+                        </div>
+
+                        <div class="info-row"><b>Expira:</b> ${item.validity || 'N/A'}</div>
+                        <div class="info-row"><b>Acceso:</b> ${accessText}</div>
+                        <div class="info-row"><b>HWID:</b> ${isBound ? device : 'Sin vincular'}</div>
+                        <div class="info-row"><b>Creada:</b> ${item.rgtime || 'N/A'}</div>
+
+                        <div class="actions">
+                            ${item.access === '1' ? `
+                                <button class="btn btn-warning btn-sm" onclick="resetHWID('${k}')">
+                                    <i class="fas fa-sync-alt"></i> Reset HWID
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-danger btn-sm" onclick="deleteKey('${k}')">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+
+        generateKey();
+    </script>
+</body>
+</html>
