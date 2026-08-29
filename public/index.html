@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PANDA VIP - Admin Server Panel</title>
+    <title>PANDA VIP - Admin Panel (Vercel Host)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -29,18 +29,18 @@
 <body>
 
     <aside class="sidebar">
-        <h2 style="color: var(--accent); margin-bottom: 20px;"><i class="fas fa-shield-alt"></i> PANDA SERVER</h2>
-        <p style="color: var(--muted); font-size: 0.85rem;">Panel de Control de Llaves</p>
+        <h2 style="color: var(--accent); margin-bottom: 20px;"><i class="fas fa-shield-alt"></i> PANDA VERCEL</h2>
+        <p style="color: var(--muted); font-size: 0.85rem;">Generador de Llaves</p>
     </aside>
 
     <main class="main">
-        <h2>Generador de Licencias</h2>
+        <h2>Crear Licencia</h2>
         <div class="card" style="max-width: 500px;">
             <div style="margin-bottom: 12px;">
-                <label>Llave a registrar</label>
+                <label>Llave Generada</label>
                 <div class="input-group">
                     <input type="text" id="keyInput" placeholder="PANDA-XXXXX-XXXXX-XXXXX">
-                    <button class="btn btn-secondary" onclick="generateKey()"><i class="fas fa-dice"></i></button>
+                    <button class="btn btn-secondary" onclick="generateKey()"><i class="fas fa-dice"></i> Random Key</button>
                 </div>
             </div>
             <div style="margin-bottom: 12px;">
@@ -48,24 +48,25 @@
                 <input type="number" id="daysInput" value="30">
             </div>
             <div style="margin-bottom: 15px;">
-                <label>Límite de Dispositivos</label>
+                <label>Límite de Dispositivos (Access)</label>
                 <select id="accessInput">
                     <option value="1">1 Dispositivo</option>
                     <option value="∞">Ilimitado (∞)</option>
                 </select>
             </div>
-            <button class="btn btn-primary" style="width: 100%;" onclick="saveKey()">Guardar en Servidor</button>
+            <button class="btn btn-primary" style="width: 100%;" onclick="saveKey()">Guardar Key</button>
         </div>
 
-        <h2>Llaves Activas</h2>
+        <h2>Lista de Llaves</h2>
         <div id="keysContainer" class="grid"></div>
     </main>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script>
+        // CONFIGURACIÓN DE TU FIREBASE REALTIME DATABASE
         const firebaseConfig = {
-            databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com" // Sustituir por tu URL
+            databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
@@ -96,7 +97,7 @@
                 device: "null",
                 rgtime: fmt(now)
             }).then(() => {
-                alert('Key guardada correctamente');
+                alert('Key guardada en el servidor');
                 generateKey();
             });
         }
@@ -110,13 +111,13 @@
                 const item = data[k];
                 container.innerHTML += `
                     <div class="key-box">
-                        <div style="display:flex; justify-between; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
                             <b style="color:var(--accent); font-size:0.9rem;">${k}</b>
                             <span class="badge ${item.status}">${item.status}</span>
                         </div>
                         <div style="font-size:0.75rem; color:var(--muted); margin: 10px 0;">
                             <div>Expira: ${item.validity}</div>
-                            <div>HWID: ${item.device}</div>
+                            <div>Device ID: ${item.device}</div>
                         </div>
                         <button class="btn btn-danger" style="padding: 4px 8px; font-size:0.7rem;" onclick="db.ref('userinfo/${k}').remove()">Eliminar</button>
                     </div>
